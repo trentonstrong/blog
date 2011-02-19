@@ -1,0 +1,48 @@
+blog NEWS
+
+2003-01-05 -- 1.0
+
+* Release 1.0. Minor changes from 0.1.8, but stable enough for a release.
+
+2002-06-24 -- 0.1.8
+
+* Switched shell back to bash; more politically correct.
+* Cleaned up a few things.
+* Fixed a no-eol-at-eof bug.
+
+2002-02-27 -- 0.1.7
+
+* Fixed potential bug when the number of entries exceeds 100.
+
+* --edit and --delete do not automatically rebuild any longer.
+
+2002-02-07 -- 0.1.6
+
+* General cluestick changes.
+
+2001-11-24 -- 0.1.5
+
+* Uses perl scripts for substitution now, not confusing and hacked awk
+  scripts.
+
+2001-11-18 -- 0.1.4
+
+* Switched shell to ksh.
+* --list and --show options added.
+* configure script added.
+* Imported into CVS.
+
+2001-08-26 -- 0.1.3
+
+* --verbose now more verbose.
+* Added manpage.
+
+2001-08-01 -- 0.1.2
+
+* First public alpha release.
+* Put together informational files, sample config file.
+* First live test on my own web site.
+
+2001-07-30 -- 0.1.1
+
+* Pre-alpha non-public release.

@@ -1,0 +1,988 @@
+#!/bin/bash
+# -*- shell-script -*-
+#
+# blog: simple weblog maintenence tool.
+# Copyright (C) 2001,2002,2003  Casey Marshall
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+
+version=2.2
+versdate="5 November 2003"
+progname=$(basename $0)
+rsync=/usr/bin/rsync
+tidy=
+ispell=
+
+# Print version info.
+#
+function version {
+  echo "$progname: version $version; $versdate."
+  echo "Copyright (C) 2001,2002,2003 Casey Marshall."
+  echo
+  echo "This program comes with NO WARRANTY, to the extent permitted by law."
+  echo "You may redistribute copies of this program under the terms of the"
+  echo "GNU General Public License.  See the file \`COPYING' for details."
+}
+
+# Print usage help.
+#
+function usage {
+  echo "usage: $progname [options]"
+  echo "       $progname [--help|--version]"
+  echo
+  echo "$progname is a rather simple website maintenence tool."
+  echo
+  echo " -a --add           Create a new entry."
+  echo " -d --delete ENTRY  Delete a given entry."
+  echo " -e --edit ENTRY    Edit a given entry. See the man pages for"
+  echo "                    a detailed description of formatting ENTRY."
+  echo " -l --list          List the titles of all entries."
+  echo " -r --rebuild       Rebuild HTML files."
+  echo " -s --show ENTRY    Display a given entry."
+  if [ "$rsync" ]; then
+    echo " -u --upload        Upload website to remote site."
+  fi
+  echo " -f --use-rc FILE   Read options from FILE."
+  echo " -v --verbose       Be verbose about the process."
+  echo "    --help          Display this message and exit."
+  echo "    --version       Display version information and exit."
+  echo
+  echo "If called with no options, same as \`$progname --add --rebuild'."
+}
+
+function die {
+  echo "$1"
+  exit 1
+}
+
+# List the titles of all entries.
+#
+function list {
+  if [ ! -d $localpath ]; then
+    echo "$progname: cannot read $localpath."
+    echo "Please ensure that it is a directory and is readable and writable by you."
+    exit 1
+  fi
+
+  if [ $verbose -eq 1 ]; then
+    echo "Listing entries..."
+  fi
+  templist=$tempdir/blog-listing
+  gzip -cd $localpath/entries.*.gz | csplit -b %04d -qz -f \
+    $tempdir/blog-entry- - "/##BEGIN_HEAD.*##$/" {*}
+	
+  let "count = 0"
+  for file in $tempdir/blog-entry-*; do
+    if [ $count -lt $totalentries -o $totalentries -eq -1 ]; then
+      csplit -zq -f $file-sect- $file "/##BEGIN_HEAD.*##$/" \
+        "/##BEGIN_ENTRY.*##$/+1" "/##END_ENTRY.*##$/"
+      . $file-sect-00
+      printf "% 4d. %s\n" $count "$entrytitle" >> $templist
+      let "count = count + 1"
+    else
+      break
+    fi
+  done
+
+  $pager $templist
+  rm -f $templist $tempdir/blog-entry-*
+}
+
+# Find an entry by title/date, or by number, then display it.
+#
+function show {
+  if [ ! -d $localpath ]; then
+    echo "$progname: cannot read $localpath."
+    echo "Please ensure that it is a directory and is readable and writable by you."
+    exit 1
+  fi
+
+  if echo $show | egrep -q "^[0-9]+$"; then
+    gzip -cd $localpath/entries.*.gz | csplit -b %04d -qz -f \
+      $tempdir/blog-entry- - "/##BEGIN_HEAD.*##$/" {*}
+    for file in $tempdir/blog-entry-*
+    do
+      csplit -zq -f $file-sect- $file "/##BEGIN_HEAD.*##$/" \
+        "/##BEGIN_ENTRY.*##$/+1" "/##END_ENTRY.*##$/"
+    done
+    num=`printf "%04d" $show`
+    if [ -e $tempdir/blog-entry-$num-sect-01 ];
+    then
+      $pager $tempdir/blog-entry-$num-sect-01
+    else
+      echo "$progname: there is no entry number $show."
+    fi
+    rm -f $tempdir/blog-entry-*
+  else
+    gzip -cd $localpath/entries.*.gz | csplit -q -f \
+      $tempdir/blog-entries- - \
+      "/##BEGIN_HEAD.*$show.*##$/" "/##END_ENTRY.*$show.*##$/+1" \
+      2> /dev/null
+    if [ -e $tempdir/blog-entries-00 -a \
+         -e $tempdir/blog-entries-01 -a \
+         -e $tempdir/blog-entries-02 ];
+    then
+      csplit -qz -f $tempdir/blog-sect- $tempdir/blog-entries-01 \
+        "/##BEGIN_ENTRY.*##$/+1" "/##END_ENTRY.*##$/"
+      $pager $tempdir/blog-sect-01
+      rm -f $tempdir/blog-entries-0? $tempdir/blog-sect-0?
+    else
+      echo -e "$progname: no entry matches \"$show\"."
+    fi
+  fi
+}
+
+# Rebuild entries into the final result.
+#
+function rebuild {
+  if [ ! -d $localpath ]; then
+    echo "$progname: cannot read $localpath."
+    echo "Please ensure that it is a directory and is readable and writable by you."
+    exit 1
+  fi
+  if [ ! -d $mainpath -o ! -w $mainpath ]; then
+    echo "$progname: $mainpath does not exist or is not writable."
+    exit 1
+  fi
+  if [ ! -e $localpath/$maintemplate ]; then
+    echo "$progname: main template file $localpath/$maintemplate not found."
+    echo "Please correct this first."
+    exit 1
+  fi
+  if [ ! -e $localpath/$archivetmplt ]; then
+    echo "$progname: archive template file $localpath/$archivetmplt not found."
+    echo "Please correct this first."
+    exit 1
+  fi
+  if [ ! -e $localpath/$entrytemplate ]; then
+    echo "$progname: entry template file $localpath/$entrytemplate not found."
+    echo "Please correct this first."
+    exit 1
+  fi
+  if [ "$feed" = "yes" -a ! -e $localpath/$feedtemplate ]; then
+	echo "$progname: feed template file $localpath/$feedtemplate not found."
+	echo "Please correct this first."
+	exit 1
+  fi
+  if [ "$individual" = "yes" -a ! -d $localpath/$indivDir ]; then
+    mkdir $mainpath/$indivDir || die "$progname: unable to create \`$indivDir'.\nPlease correct this."
+  fi
+  if [ "$individual" = "yes" -a ! -f $localpath/$indivTemplate ]; then
+    echo "$progname: individual entry template $localpath/$indivTemplate not found."
+    echo "Please correct this first."
+    exit 1
+  fi
+
+  if [ $verbose -eq 1 ]; then
+    echo "About to rebuild files..."
+  fi
+  count=0
+  tempfile=$tempdir/blog-temp-`date +%s`
+  feedtemp=$tempdir/feed-temp-`date +%s`
+  gzip -cd $localpath/entries.*.gz | csplit -b %04d -qz -f \
+    $tempdir/blog-entry- - "/##BEGIN_HEAD.*##$/" {*}
+
+  for file in $tempdir/blog-entry-*; do
+    if [ $count -lt $maxentries -o $maxentries -eq -1 ]; then
+      cat $localpath/$entrytemplate >> $tempfile
+      csplit -zq -f $file-sect- $file "/##BEGIN_HEAD.*##$/" \
+        "/##BEGIN_ENTRY.*##$/+1" "/##END_ENTRY.*##$/"
+      . $file-sect-00
+      _entrytitle=`echo $entrytitle | \
+        perl -e "while (<STDIN>) {
+          \\$_ =~ s/\\'/\\\\\\\\'/g;
+          print;
+        }"`
+      _entrydate=`echo $entrydate | \
+        perl -e "while (<STDIN>) {
+          \\$_ =~ s/\\'/\\\\\\\\'/g;
+          print;
+        }"`
+      perl -e "open (IN, \"$tempfile\");
+        open (ENTRY, \"${file}-sect-01\");
+        while (<ENTRY>) {
+          \$entry = \$entry . \$_;
+        }
+        close (ENTRY);
+        \$entrydate = '$_entrydate';
+        \$entrytitle = '$_entrytitle';
+        \$entryid = '$entryid';
+        while (<IN>) {
+          \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
+          \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
+          \$_ =~ s/<-blogentrybody->/\$entry/gio;
+          \$_ =~ s/<-blogentryid->/\$entryid/gio;
+          print;
+        }
+        close (IN);" > $tempfile.2
+      mv -f $tempfile.2 $tempfile
+      if [ "$individual" = "yes" -a "$entryid" ]; then
+        cat $localpath/$indivTemplate > $tempdir/$entryid$indivSuffix
+        perl -e "open (IN, \"${tempdir}/${entryid}${indivSuffix}\");
+          open(OUT, \">${mainpath}/${indivDir}/${entryid}${indivSuffix}\");
+          open(ENTRY, \"${file}-sect-01\");
+          \$entry = \"\";
+          while (<ENTRY>) {
+            \$entry .= \$_;
+          }
+          close (ENTRY);
+          \$entrydate = '$_entrydate';
+          \$entrytitle = '$_entrytitle';
+          \$entryid = '$entryid';
+          while (<IN>) {
+            \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
+            \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
+            \$_ =~ s/<-blogentrybody->/\$entry/gio;
+            \$_ =~ s/<-blogentryid->/\$entryid/gio;
+            print OUT \$_;
+          }
+          close(IN);
+          close(OUT);"
+        rm $tempdir/$entryid$indivSuffix
+      fi
+	  if [ "$feed" = "yes" -a "$entryid" ]; then
+		cat $localpath/$feedentrytemplate >> $feedtemp
+		perl -e "open (IN, \"$feedtemp\");
+        open (ENTRY, \"${file}-sect-01\");
+        while (<ENTRY>) {
+          \$entry = \$entry . \$_;
+        }
+        close (ENTRY);
+        \$entrydate = '$_entrydate';
+        \$entrytitle = '$_entrytitle';
+        \$entryid = '$entryid';
+        while (<IN>) {
+          \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
+          \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
+          \$_ =~ s/<-blogentrybody->/\$entry/gio;
+          \$_ =~ s/<-blogentryid->/\$entryid/gio;
+          print;
+        }
+        close (IN);" > $feedtemp.2
+		mv -f $feedtemp.2 $feedtemp
+	  fi
+      rm -f $file*
+      let "count = count + 1"
+    else
+      break
+    fi
+  done
+  
+  cat $localpath/$maintemplate > $mainpath/$mainindex
+  perl -e "open (IN, \"$mainpath/$mainindex\");
+    open (ENTRIES, \"$tempfile\");
+    while (<ENTRIES>) {
+      \$entries = \$entries . \$_;
+    }
+    close (ENTRIES);
+    while (<IN>) {
+      \$_ =~ s/<-blogentries->/\$entries/gio;
+      print;
+    }
+    close (IN);" > $tempfile.2
+  mv $tempfile.2 $mainpath/$mainindex
+  if [ "`echo $usetidy | grep ^[yY]`" ]; then
+    $tidy ${tidyargs} -m $mainpath/$mainindex
+  fi
+  rm -f $tempfile
+  
+  _date=`date +"$datefmt"`
+  if [ "$feed" = "yes" ]; then
+    cat $localpath/$feedtemplate > $mainpath/$feedindex
+	perl -e "open (IN, \"$mainpath/$feedindex\");
+		open (ENTRIES, \"$feedtemp\");
+		while (<ENTRIES>) {
+		\$entries = \$entries . \$_;
+		}
+		close (ENTRIES);
+		\$date = '$_date';
+		while (<IN>) {
+		\$_ =~ s/<-date->/\$date/gio;
+		\$_ =~ s/<-feedentries->/\$entries/gio;
+		print;
+		}
+		close (IN);" > $feedtemp.2
+	mv -f $feedtemp.2 $mainpath/$feedindex
+  fi
+  rm -f $feedtemp
+
+  archivenumber=0
+  rm -f $mainpath/$archivepre*$archivesuf
+  while [ "`ls $tempdir/blog-entry-* 2> /dev/null`" ]; do
+    count=0
+    for file in $tempdir/blog-entry-*; do
+      if [ $count -lt $maxentries -o $maxentries -eq -1 ]; then
+        cat $localpath/$entrytemplate >> $tempfile
+        csplit -zq -f $file-sect- $file "/##BEGIN_HEAD.*##$/" \
+          "/##BEGIN_ENTRY.*##$/+1" "/##END_ENTRY.*##$/"
+        . $file-sect-00
+        _entrytitle=`echo $entrytitle | \
+          perl -e "while (<STDIN>) {
+            \\$_ =~ s/'/\\\\\\\\'/g;
+            print;
+          }"`
+        _entrydate=`echo $entrydate | \
+          perl -e "while (<STDIN>) {
+            \\$_ =~ s/'/\\\\\\\\'/g;
+            print;
+          }"`
+        perl -e "open (IN, \"$tempfile\");
+          open (ENTRY, \"$file-sect-01\");
+          while (<ENTRY>) {
+            \$entry = \$entry . \$_;
+          }
+          close (ENTRY);
+          \$entrydate = '$_entrydate';
+          \$entrytitle = '$_entrytitle';
+          \$entryid = '$entryid';
+          while (<IN>) {
+            \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
+            \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
+            \$_ =~ s/<-blogentrybody->/\$entry/gio;
+            \$_ =~ s/<-blogentryid->/\$entryid/gio;
+            print;
+          }
+          close (IN);" > $tempfile.2
+        mv -f $tempfile.2 $tempfile
+        if [ "$individual" = "yes" -a "$entryid" ]; then
+          cat $localpath/$indivTemplate > $tempdir/$entryid$indivSuffix
+          perl -e "open (IN, \"${tempdir}/${entryid}${indivSuffix}\");
+            open(OUT, \">${mainpath}/${indivDir}/${entryid}${indivSuffix}\");
+            open(ENTRY, \"$file-sect-01\");
+            while (<ENTRY>) {
+              \$entry = \$entry . \$_;
+            }
+            close (ENTRY);
+            \$entrydate = '$_entrydate';
+            \$entrytitle = '$_entrytitle';
+            \$entryid = '$entryid';
+            while (<IN>) {
+              \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
+              \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
+              \$_ =~ s/<-blogentrybody->/\$entry/gio;
+              \$_ =~ s/<-blogentryid->/\$entryid/gio;
+              print OUT \$_;
+            }
+            close(IN);
+            close(OUT);"
+          rm -f $tempdir/$entryid$indivSuffix
+        fi
+        rm -f $file*
+        let "count = count + 1"
+      else
+        break
+      fi
+    done
+    cat $localpath/$archivetmplt > \
+      $mainpath/$archivepre$archivenumber$archivesuf
+    perl -e "open (IN, \"$mainpath/$archivepre$archivenumber$archivesuf\");
+      open (ENTRIES, \"$tempfile\");
+      while (<ENTRIES>) {
+        \$entries = \$entries . \$_;
+      }
+      close (ENTRIES);
+      while (<IN>) {
+        \$_ =~ s/<-blogentries->/\$entries/gio;
+        print;
+      }
+      close (IN);" > $tempfile.2
+    mv $tempfile.2 $mainpath/$archivepre$archivenumber$archivesuf
+    rm -f $tempfile
+    if [ "`echo $usetidy | grep ^[yY]`" ]; then
+      $tidy ${tidyargs} -m $mainpath/$archivepre$archivenumber$archivesuf
+    fi
+ 
+    let "archivenumber = archivenumber + 1" 
+  done
+
+  if [ $verbose -eq 1 ]; then
+    echo "Finished rebuilding."
+  fi
+}
+
+# Delete an entry.
+#
+function delete {
+  if [ ! -d $localpath ]; then
+    echo "$progname: cannot read $localpath."
+    echo "Please ensure that it is a directory and is readable and writable by you."
+    exit 1
+  fi
+
+  if echo $delete | egrep -q ^[0-9]+$
+  then
+    for file in $localpath/entries.*.gz; do
+      gzip -cd $file | csplit -b %04d -qz -f $tempdir/blog-entry- - \
+        "/##BEGIN_HEAD.*##$/" {*}
+      num=$(printf "%04d" $delete)
+      if [ -e $tempdir/blog-entry-$num ]; then
+        out=$(basename $file .gz)
+        for ent in $tempdir/blog-entry-*
+        do
+          if [ "$ent" != "$tempdir/blog-entry-$num" ]; then
+            cat $ent >> $localpath/$out
+          fi
+        done
+        gzip -f $localpath/$out
+      else
+        echo "$progname: there is no entry number $delete."
+      fi
+      rm -f $tempdir/blog-entry-*
+    done
+  else
+    for file in $localpath/entries.*.gz; do
+      gzip -cd $file | csplit -q -f $tempdir/blog-entries- - \
+        "/##BEGIN_HEAD.*$delete.*##$/" "/##END_ENTRY.*$delete.*##$/+1"
+      if [ -e $tempdir/blog-entries-00 -a \
+           -e $tempdir/blog-entries-01 -a \
+           -e $tempdir/blog-entries-02 ];
+      then
+        out=$(basename $file .gz)
+        cat $tempdir/blog-entries-00 > $localpath/$out
+        cat $tempdir/blog-entries-02 >> $localpath/$out
+        gzip -f $localpath/$out
+        rm -f $tempdir/blog-entries-0?
+      fi
+    done
+    echo "Couldn't match $delete in any entry."
+  fi
+}
+
+# Find and edit an entry.
+#
+function edit {
+  if [ ! -d $localpath ]; then
+    echo "$progname: cannot read $localpath."
+    echo "Please ensure that it is a directory and is readable and writable by you."
+    exit 1
+  fi
+
+  if echo $edit | egrep -q ^[0-9]+$
+  then
+    for file in $localpath/entries.*.gz; do
+      gzip -cd $file | csplit -b %04d -qz -f $tempdir/blog-entry- - \
+        "/##BEGIN_HEAD.*##$/" {*}
+      num=$(printf "%04d" $edit)
+      if [ -e $tempdir/blog-entry-$num ]; then
+        csplit -qz -f $tempdir/blog-sec- $tempdir/blog-entry-$num \
+          "/##BEGIN_HEAD.*##$/" "/##BEGIN_ENTRY.*##$/+1" \
+          "/##END_ENTRY.*##$/"
+        $editor $tempdir/blog-sec-01
+        if [ -n "$ispell" ]; then
+          echo -n "Do you want to spell check this entry? (y) "
+          read REPLY
+          if [ "$REPLY" ]; then
+            if [ "`echo $REPLY | grep ^[yY]`" ]; then
+              $ispell -x $tempdir/blog-sec-01
+            fi
+          else
+            $ispell -x $tempdir/blog-sec-01
+          fi
+        fi
+        cat $tempdir/blog-sec-0? > $tempdir/blog-entry-$num
+        out=`basename $file .gz`
+        cat $tempdir/blog-entry-* > $localpath/$out
+        gzip -f $localpath/$out
+      else
+        echo "$progname: there is no entry number $edit."
+      fi
+      rm -f $tempdir/blog-entry-* $tempdir/blog-sec-*
+    done
+  else
+    for file in $localpath/entries.*.gz; do
+      gzip -cd $file | csplit -q -f $tempdir/blog-entries- - \
+        "/##BEGIN_HEAD.*$edit.*##$/" "/##END_ENTRY.*$edit.*##$/+1" \
+        2> /dev/null
+      if [ -e $tempdir/blog-entries-00 -a \
+           -e $tempdir/blog-entries-01 -a \
+           -e $tempdir/blog-entries-02 ];
+      then
+        csplit -qz -f $tempdir/blog-sec- $tempdir/blog-entries-01 \
+          "/##BEGIN_HEAD.*##$/" "/##BEGIN_ENTRY.*##$/+1" \
+          "/##END_ENTRY.*##$/"
+        $editor $tempdir/blog-sec-01
+        if [ -n "$ispell" ]; then
+          echo -n "Do you want to spell check this entry? (y) "
+          read REPLY
+          if [ "$REPLY" ]; then
+            if [ "`echo $REPLY | grep ^[yY]`" ]; then
+              $ispell -x $tempdir/blog-sec-01
+            fi
+          else
+            $ispell -x $tempdir/blog-sec-01
+          fi
+        fi
+        cat $tempdir/blog-sec-0? > $tempdir/blog-entries-01
+        out=`basename $file .gz`
+        cat $tempdir/blog-entries-0? > $localpath/$out
+        gzip -f $localpath/$out
+        return
+      fi
+    done
+    echo "Couldn't match $edit in any entry."
+  fi
+}
+
+verbose=0
+add=1
+rebuild=1
+upload=0
+edit=
+delete=
+list=0
+show=
+
+# Parse command-line options
+
+OPTS=$(getopt -n $progname -l "help,version,verbose,use-rc:,upload,add,edit:,rebuild,delete:,list,show:" -o "vf:uae:rd:ls:" -- $@)
+
+if [ $? -ne 0 ];
+then
+  echo "Try \`blog --help' for more information."
+  exit 1
+fi
+
+for arg in $OPTS
+do
+ 	case $arg in
+    --help) usage; exit 0 ;;
+    --version) version; exit 0 ;;
+    -v|--verbose) verbose=1 ;;
+    -f|--use-rc) argstate=rc-follows ;;
+    -e|--edit) argstate=edit-follows
+      if [ $add -eq 1 ]; then
+        add=0
+      fi
+      if [ $rebuild -eq 1 ]; then
+        rebuild=0
+      fi
+      ;;
+    -d|--delete) argstate=delete-follows
+      if [ $rebuild -eq 1 ]; then
+        rebuild=0
+      fi
+      if [ $add -eq 1 ]; then
+        add=0
+      fi;;
+    -r|--rebuild) rebuild=2 
+      if [ $add -eq 1 ]; then
+        add=0
+      fi;;
+    -u|--upload) upload=1 
+      if [ $rebuild -eq 1 ]; then
+        rebuild=0
+      fi
+      if [ $add -eq 1 ]; then
+        add=0
+      fi;;
+    -l|--list) list=1
+      if [ $rebuild -eq 1 ]; then
+        rebuild=0
+      fi
+      if [ $add -eq 1 ]; then
+        add=0
+      fi;;
+    -s|--show) argstate=show-follows
+      if [ $rebuild -eq 1 ]; then
+        rebuild=0
+      fi
+      if [ $add -eq 1 ]; then
+        add=0
+      fi;;
+    -a|--add) add=2
+      if [ $rebuild -eq 1 ]; then
+        rebuild=0
+      fi
+      ;;
+    -*) ;;
+    *)
+      if [ "$argstate" = "rc-follows" ]; then
+        rcfile=`echo $arg | tr -d =\'`
+      elif [ "$argstate" = "edit-follows" ]; then
+        edit=`echo $arg | tr -d =\'`
+      elif [ "$argstate" = "delete-follows" ]; then
+        delete=`echo $arg | tr -d =\'`
+      elif [ "$argstate" = "show-follows" ]; then
+        show=`echo $arg | tr -d =\'`
+      fi 
+      argstate= 
+      ;;
+  esac
+done
+
+if [ -z "$rcfile" ]; then
+  if [ -z "$BLOGRC" ]; then
+    rcfile=$HOME/.blogrc
+  else
+    rcfile=$BLOGRC
+  fi
+fi
+
+editor=$EDITOR
+pager=$PAGER
+host=
+remotepath=
+username=`whoami`
+usetidy=y
+localpath=`pwd`
+tempdir=/tmp
+maxentries=-1
+totalentries=-1
+mainindex=index.html
+mainpath=
+maintemplate=template
+archivetmplt=template
+archivepre=archive
+archivesuf=.html
+entrytemplate=entry.template
+datefmt="%A, %d %B %Y"
+individual=no
+indivDir=entries/
+indivTemplate=indiv.template
+indivSuffix=.html
+feed=no
+feedtemplate=feed.template
+feedentrytemplate=feedentry.template
+feedindex=feed.xml
+
+if [ -e $rcfile ]; then
+  . $rcfile
+  if [ -z "$mainpath" ]; then
+    mainpath=$localpath
+  fi
+else
+  echo "I can't find a config file, so I'll ask you some questions."
+  echo "Supply an appropriate answer, or just hit enter to use"
+  echo "the default (in brackets)."
+  echo
+ 	echo -n "Which editor do you want to use? ($editor) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    editor=$REPLY
+  fi
+  echo -n "What pager do you want to use? ($pager) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    pager=$REPLY
+  fi
+  if [ -n "$rsync" ] ; then
+    echo -n "What is your website host's name? ($host) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      host=$REPLY
+    fi
+    echo -n "What is your username for $host? ($username) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      username=$REPLY
+    fi
+    echo -n "What is the path to your weblog? ($remotepath) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      remotepath=$REPLY
+    fi
+  fi
+  
+  if [ "$tidy" ] ; then
+    echo -n "Would you like to use HTML Tidy to filter your pages? ($usetidy) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      usetidy=$REPLY
+    fi
+    echo -n "What options (in addition to -m) shall I pass to tidy?  (none) "
+    read tidyopts
+  else
+    usetidy=no
+  fi
+  echo -n "Where should I keep your local copies? ($localpath) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    localpath=$REPLY
+  fi
+  echo -n "Where should I keep local temporary files? ($tempdir) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    tempdir=$REPLY
+  fi
+  echo -n "How many entries should I keep per page, -1 for all? ($maxentries) "
+  read REPLY
+  if [ "`echo $REPLY | egrep ^[-+]?[0-9]+$`" ]; then
+    maxentries=$REPLY
+  fi
+  echo -n "How many entries, total, should I keep, -1 for all? ($totalentries) "
+  read REPLY
+  if [ "`echo $REPLY | egrep ^[-+]?[0-9]+$`" ]; then
+    totalentries=$REPLY
+  fi
+  echo -n "What do you want your main page called? ($mainindex) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    mainindex=$REPLY
+  fi
+  mainpath=$localpath
+  echo -n "Where should I put generated files? ($mainpath) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    mainpath=$REPLY
+  fi
+  echo -n "What should I prefix to archive files? ($archivepre) "
+  read REPLY
+  if [ "$RELPY" ]; then
+    archivepre=$REPLY
+  fi
+  echo -n "What should I suffix to archive files? ($archivesuf) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    archivesuf=$REPLY
+  fi
+  echo "What is the name of the main page's template? ($maintemplate) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    maintemplate=$REPLY
+  fi
+  echo -n "Is the archive template the same? (yes) "
+  read REPLY
+  if [ "`echo $REPLY | grep ^[nN]`" ]; then
+    echo -n "What is the name of the archives' template? ($archivetmplt) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      archivetmplt=$REPLY
+    fi
+  fi
+  echo -n "How shall I format the date? ($datefmt) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    datefmt="$REPLY"
+  fi
+  echo -n "Shall I generate a page for each individual entry? ($individual) "
+  read REPLY
+  if [ "$REPLY" = "yes" -o "$REPLY" = "y" ]; then
+    individual=yes
+    echo -n "In what directory should I put individual entries? ($indivDir) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      indivDir=$REPLY
+    fi
+    echo -n "What is the template file for individual entries? ($indivTemplate) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      indivTemplate=$REPLY
+    fi
+    echo -n "What should I use as the suffix for individual entries? ($indivSuffix) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      indivSuffix=$REPLY
+    fi
+  fi
+  echo -n "Would you like to create a feed? ($feed) "
+  read REPLY
+  if [ "$REPLY" = "yes" -o "$REPLY" = "y" ]; then
+    feed=yes
+	echo -n "What is the template file for the feed? ($feedtemplate) "
+	read REPLY
+	if [ "$REPLY" ]; then
+		feedtemplate=$REPLY
+	fi
+	echo -n "What is the template file for a feed entry? ($feedentrytemplate) "
+	read REPLY
+	if [ "$REPLY" ]; then
+		feedentrytemplate=$REPLY
+	fi
+  fi
+  echo -n "Where should I save these options? ($rcfile) "
+  read REPLY
+  if [ "$REPLY" ]; then
+    rcfile=$REPLY
+  fi
+  if [ "$rcfile" != "$HOME/.blogrc" ]; then
+    cat <<EOF
+
+Since you chose a different location for saving these options,
+I will not know where they are unless you either set the BLOGRC
+environment variable to this file, or specify this file with
+the --use-rc switch.
+EOF
+  fi
+  echo "blogVersion=2.2" >> $rcfile
+  echo "editor=$editor" >> $rcfile
+  echo "pager=$pager" >> $rcfile
+  echo "host=$host" >> $rcfile
+  echo "remotepath=$remotepath" >> $rcfile
+  echo "username=$username" >> $rcfile
+  echo "usetidy=$usetidy" >> $rcfile
+  echo "tidyopts=\"$tidyopts\"" >> $rcfile
+  echo "localpath=$localpath" >> $rcfile
+  echo "maxentries=$maxentries" >> $rcfile
+  echo "totalentries=$totalentries" >> $rcfile
+  echo "tempdir=$tempdir" >> $rcfile
+  echo "mainindex=$mainindex" >> $rcfile
+  echo "mainpath=$mainpath" >> $rcfile
+  echo "maintemplate=$maintemplate" >> $rcfile
+  echo "archivetmplt=$archivetmplt" >> $rcfile
+  echo "archivepre=$archivepre" >> $rcfile
+  echo "archivesuf=$archivesuf" >> $rcfile
+  echo "entrytemplate=$entrytemplate" >> $rcfile
+  echo "individual=$individual" >> $rcfile
+  echo "indivDir=$indivDir" >> $rcfile
+  echo "indivTemplate=$indivTemplate" >> $rcfile
+  echo "indivSuffix=$indivSuffix" >> $rcfile
+  echo "feed=$feed" >> $rcfile
+  echo "feedtemplate=$feedtemplate" >> $rcfile
+  echo "feedentrytemplate=$feedentrytemplate" >> $rcfile
+  echo "feedindex=$feedindex" >> $rcfile
+  if [ ! -e $localpath ]; then
+    mkdir -p $localpath
+  fi
+  exit 0
+fi
+
+# add entry
+
+if [ $add -ge 1 ]; then
+  if [ ! -d $localpath ]; then
+    echo "$progname: cannot read $localpath."
+    echo "Please ensure that it is a directory and is readable and writable by you."
+    exit 1
+  fi
+
+  entryid=`date +%Y%m%d%H%M%S`
+  entrydate=`date +"$datefmt"`
+  if [ $verbose -eq 1 ]; then
+    echo "Adding new entry for date $entrydate..."
+  fi
+  echo -n "What is this entry's title? "
+  read entrytitle
+  tempfile=$tempdir/blog-temp-`date +%s`
+  $editor $tempfile
+  if [ -n "$ispell" ]; then
+    echo -n "Do you want to spell check this entry? (y) "
+    read REPLY
+    if [ "$REPLY" ]; then
+      if [ "`echo $REPLY | grep ^[yY]`" ]; then
+        $ispell -x $tempfile
+      fi
+    else
+      $ispell -x $tempfile
+    fi
+  fi
+  if [ "`ls $localpath/entries.*.gz 2> /dev/null`" ]; then
+    gzip -cd $localpath/entries.*.gz |\
+      csplit -qz -f $tempdir/blog-entry- - "/##BEGIN_HEAD.*##$/" {*}
+    rm $localpath/entries*.gz
+  elif [ ! -e $localpath ]; then
+    mkdir -p $localpath
+  fi
+
+  tail -c 1 $tempfile | perl -n -e 'exit(!/[^\r\n]/);' && echo >> $tempfile
+ 
+  echo "##BEGIN_HEAD $entrydate $entrytitle##" > $localpath/entries.0
+  echo "entryid=\"$entryid\"" >> $localpath/entries.0
+  echo "entrydate=\"$entrydate\"" >> $localpath/entries.0
+  echo "entrytitle=\"$entrytitle\"" >> $localpath/entries.0
+  echo "##BEGIN_ENTRY $entrydate $entrytitle##" >> $localpath/entries.0
+  cat $tempfile >> $localpath/entries.0
+  echo "##END_ENTRY $entrydate $entrytitle##" >> $localpath/entries.0
+
+  count=1
+  entryfilecount=0
+  while [ "`ls $tempdir/blog-entry-* 2> /dev/null`" ]; do
+    for ent in $tempdir/blog-entry-*; do
+      if [ $count -lt $totalentries -o $totalentries -eq -1 ]; then
+        cat $ent >> $localpath/entries.$entryfilecount
+        rm -f $ent
+        let "count = count + 1"
+      else
+        break
+      fi
+    done
+    count=0
+    let "entryfilecount = entryfilecount + 1"
+  done
+
+  for file in $localpath/entries.*; do
+    gzip -f $file
+  done
+
+  if [ '$postexec' ]; then
+    _entrytitle=`echo $entrytitle | \
+      perl -e "while (<STDIN>) {
+        \\$_ =~ s/\\'/\\\\\\\\'/g;
+        print;
+      }"`
+    _entrydate=`echo $entrydate | \
+      perl -e "while (<STDIN>) {
+        \\$_ =~ s/\\'/\\\\\\\\'/g;
+        print;
+      }"`
+    perl -e "
+      \$e = '$postexec';
+      \$entrydate = '$_entrydate';
+      \$entrytitle = '$_entrytitle';
+      \$entryid = '$entryid';
+      \$entry = '$tempfile';
+      \$e =~ s/%t/\$entrytitle/g;
+      \$e =~ s/%d/\$entrydate/g;
+      \$e =~ s/%i/\$entryid/g;
+      \$e =~ s/%f/\$entry/g;
+      exec \$e;"
+  fi
+  rm -f $tempfile
+fi
+
+if [ $rebuild -ge 1 ]; then
+  rebuild
+fi
+
+if [ "$delete" ]; then
+  delete
+fi
+
+if [ "$edit" ]; then
+  edit
+fi
+
+if [ $list -gt 0 ]; then
+  list
+fi
+
+if [ "$show" ]; then
+  show
+fi
+
+if [ -n "$rsync" ]; then
+  if [ $upload -eq 1 ]; then
+    if [ $verbose -eq 1 ]; then
+      rsyncopts=-vR
+    else
+      rsyncopts=-R
+    fi
+    cd $mainpath
+    files=
+    for f in $mainindex $archivepre*$archivesuf $indivDir/*$indivSuffix $feedindex
+    do
+      if [ -e $f ]; then
+        files="$files $f"
+		echo Found $f
+      fi
+    done
+    if [ "$uploadInclude" ]; then
+      files="$files $uploadInclude"
+    fi
+	echo Uploading...
+    $rsync $rsyncopts $files $username@$host:$remotepath
+    cd $OLDPWD
+  fi
+fi

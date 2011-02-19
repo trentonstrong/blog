@@ -1,0 +1,11 @@
+Installation is usually as simple as running:
+
+	./configure
+	make
+	make install
+
+Nothing is compiled, since this "program" is just a shell script. What
+happens is the configure script looks for programs needed to run this
+script, then the make command substitutes the locations of those programs
+in the script. The only fatal error can occur if the Bourne-again shell,
+usually `bash' or `sh', or if a Perl interpreter cannot be found.

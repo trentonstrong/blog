@@ -1,0 +1,20 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+<html>
+<head>
+<title>My weblog</title>
+</head>
+<body>
+<h1>My weblog</h1>
+
+<!-- This is an example of a template file used to format individual
+     entry pages. -->
+     
+<p><b><-blogentrytitle-></b><br>
+<-blogentrydate-></p>
+
+<-blogentrybody->
+
+<!-- Everything besides this is output verbatim. -->
+
+</body>
+</html>

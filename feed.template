@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+ 
+<rss version="2.0">
+ <channel>
+	<title>Feed Title</title>
+	<link>http://example.org/</link>
+	<description>Feed Description</description>
+	<copyright>Copyright 2011, John Doe</copyright>
+	<pubDate><-date-></pubDate>
+	<lastBuildDate><-date-></lastBuildDate>
+	<category>blog</category>
+	<ttl>60</ttl>
+	<author>
+		<name>John Doe</name>
+		<email>johndoe@example.org</email>
+	</author>
+
+ 	<!-- Feed entries are inserted below -->
+	<-feedentries->
+
+ </channel>
+</rss>

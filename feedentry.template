@@ -1,0 +1,9 @@
+	<item>
+		<title><-blogentrytitle-></title>
+		<author>johndoe@example.org</author>
+		<link>http://example.org/entries/<-blogentryid->.html</link>
+		<guid>http://example.org/feed/<-blogentryid-></guid>
+		<pubDate><-blogentrydate-></pubDate>
+		<description></description>
+	</item>
+

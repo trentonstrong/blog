@@ -1,0 +1,20 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+<html>
+<head>
+	<title>My blog</title>
+	<link rel="alternate" type="application/rss+xml"
+		  href="feed.xml" title="My RSS" />
+</head>
+<body>
+<h1>My blog</h1>
+
+<!-- This is an example of a template file used to format both main and
+     archive pages. The following is replaced with the appropriate
+     entries: -->
+     
+<-blogentries->
+
+<!-- Everything besides this is output verbatim. -->
+<a type="application/rss+xml" href="feed.xml">RSS Feed</a>
+</body>
+</html>

@@ -1,0 +1,10 @@
+<!-- This is an example entry template. For each entry, the three
+entities are replaced with their appropriate values, and everything else
+is output verbatim. -->
+
+<p><b><-blogentrytitle-></b><br>
+<-blogentrydate-></p>
+
+<-blogentrybody->
+
+<hr>

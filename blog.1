@@ -1,0 +1,265 @@
+.\" blog.1 - manpage for blog(1)
+.\" Copyright (C) 2001 Casey Marshall  rsdio@metastatic.org
+.\" $Id: blog.1,v 1.4 2003/07/03 04:48:22 rsdio Exp $
+.\"
+.TH BLOG 1 "$Date: 2003/07/03 04:48:22 $"
+.SH NAME
+blog \- maintain a remote weblog
+.SH SYNOPSIS
+.B blog
+.RB [ options ]
+.br
+.B blog
+.RB [ \-\-help | \-\-version ]
+.SH DESCRIPTION
+.B blog
+is a command-line website-maintenaince tool that works with ``entries''.
+That is, the website contains some number of dated, titled entries, like
+a journal or weblog. Entries may be added, deleted, or edited.
+.PP
+The resulting pages are usually HTML, but this isn't necessary. If they
+are HTML, then one has the option to check them with
+.BR tidy (1)
+before uploading them, and each entry can be spell-checked with
+.BR ispell (1).
+.PP
+What is unique about this program, compared to other blogging tools, is
+that it is hosted locally, all that is uploaded to a remote site are the
+HTML files generated. Furthermore, uploading is done with 
+.BR rsync (1),
+so it is potentially far faster than uploading via FTP, and the entire
+process is more secure, for there are no CGI scripts on one's website
+and the transmission may be done using 
+.BR ssh (1).
+.SH OPTIONS
+If called with no options, same as `blog --add --rebuild'.
+.TP
+.B -a, --add
+Create a new entry. Called with this option, a prompt will appear asking
+for a title, the specified editor will open (allowing the entry to be
+written), a prompt will appear asking if this entry should be
+spell-checked, then the local HTML files will be rebuilt, optionally
+filtering them through
+.BR tidy (1)
+.TP
+.BI -d\ --delete\  ENTRY
+Deletes an entry. If
+.I ENTRY
+is a string, it is used as part of a regular expression to find
+the entry, so it should be part of the entry's date (e.g. ``1 April'')
+or part of the entry's title. If multiple matches exist, the most recent
+of the matches will be deleted. If
+.I ENTRY
+is an integer, the entry numbered
+.I ENTRY
+is deleted. Use this option with care.
+.TP
+.BI -e\ --edit\  ENTRY
+Edit a given entry.
+.I ENTRY
+is used in a similar fashion as with
+.BR --delete .
+.TP
+.B -l --list
+List the titles of all entries that are uploaded. The number at the left
+is the number of the entry, which can be used with
+.BR --delete ,\  --edit ,\ and\  --show .
+.TP
+.B -r --rebuild
+Rebuild all HTML files, optionally filtering them through 
+.BR tidy (1).
+.TP
+.BI -s\ --show\  ENTRY
+Display an entry. The format of
+.I ENTRY
+is the same as
+.BR --delete\  and\  --edit .
+.TP
+.B -u --upload
+Upload HTML files to remote site.
+.TP
+.BI -f\ --use-rc\  FILE
+Read options from FILE.
+.TP
+.B -v --verbose
+Be verbose about the process.
+.TP
+.B --help
+Display usage message and exit.
+.TP
+.B --version
+Display version information and exit.
+.SH BLOG.RC
+In order to maintain files locally and remotely, an option file 
+.B blog.rc
+should be kept. The default location of this file is 
+.BR ~/.blogrc ,
+but this is configurable. If no option file exists when the program is
+called, then it will interactively prompt for the values of these
+options, saving them where you specify.
+.PP
+Options are of the form
+.BR name = value ,
+and are:
+.TP
+.B editor
+The text editor to use when adding new entries. This must be a string
+that is the name of a text editor that is in
+.BR $PATH .
+The default is 
+.BR $EDITOR .
+.TP
+.B pager
+The full-screen file-viewer to use, such as
+.BR less (1).
+The default is
+.BR $PAGER .
+.TP
+.B host
+The name of the host to upload to. This host must be capable of rsh or
+ssh transactions.
+.TP
+.B remotepath
+The path (directory) on 
+.B host
+to store the uploaded files.
+.TP
+.B username
+The username for logging into the account on
+.BR host .
+.TP
+.B usetidy
+y[es] or n[o]. Specifies whether to filter generated HTML through
+.BR tidy (1),
+which must be available on the system and in
+.BR $PATH .
+.TP
+.B tidyargs
+Additional argments (including `-m') to pass to
+.BR tidy (1).
+.TP
+.B localpath
+The path on the local system to keep files.
+.TP
+.B tempdir
+The path on the local system to keep temporary files. Must have
+read/write permissions.
+.TP
+.B maxentries
+Integer. The maximum number of entries to keep on any generated page. If
+set to -1, all entries are kept on the main page (and no archive files
+are kept).
+.TP
+.B totalentries
+Integer. The number of entries, total, to upload to 
+.BR host .
+If set to -1, all entries are uploaded (spanning perhaps multiple
+files).
+.TP
+.B mainindex
+The name of the main index file, e.g. ``index.html''.
+.TP
+.B maintemplate
+The name of the main template file, which must be located in
+.BR localpath .
+This file should contain, on a line by itself,
+.BR <-blogentries-> ,
+which is where the entries are inserted.
+.TP
+.B mainpath
+The path on the local machine to put generated files. If not set, the
+value of
+.B localpath
+is assumed.
+.TP
+.B archivetmplt
+The name of the template file for archive files. Must also exist in
+.BR localpath ,
+and the format is the same as
+.BR maintemplate .
+.TP
+.B entrytemplate
+The template used to format individual entries. The following entities
+are expanded:
+.RS 4
+.TP
+.B <-blogentrydate->
+The date that this entry was added.
+.TP
+.B <-blogentrytitle->
+The title given for this entry.
+.TP
+.B <-blogentrybody->
+The body of the entry. This entity should appear on a line by itself.
+.TP
+.B <-blogentryid->
+The unique identifier of this entry. This is usually only useful when
+creating a permanent link to individual entries, if you choose to build
+them.
+.RE
+.TP
+.B archivepre
+String to prefix to archive files. May end with '/', and archive files
+will be kept in a separate directory. Archive files are named by
+prefixing 
+.B archivepre
+to an integer counting up from zero, then suffixing 
+.BR archivesuf .
+.TP
+.B archivesuf
+String to suffix to archive files. E.g. ``.html''.
+.TP
+.B datefmt
+The format for writing the dates of entries. This is the same format as
+.BR date (1).
+.TP
+.B individual
+If set to ``yes'', then create a page for each individual entry.
+.TP
+.B indivDir
+The directory, relative to
+.BR localpath \ and \ remotepath ,
+to store individual entries in, if they are being built.
+.TP
+.B indivTemplate
+The template file for individual entries. The same entities as those
+described in
+.B entrytemplate
+above are expanded.
+.TP
+.B indivSuffix
+The suffix to append to individual entry files, e.g. ``.html''.
+.TP
+.B postexec
+A command to run after adding an entry. You can include the following
+entities in the spec:
+.RS 4
+.TP
+.B %t
+is eplaced by the entry's title.
+.TP
+.B %d
+is replaced by the entry's date.
+.TP
+.B %i
+is replaced by the entry's ID.
+.RE
+.SH FILES
+~/.blogrc or the value of $BLOGRC.
+.SH ENVIRONMENT
+.TP
+.B $BLOGRC
+The location of the 
+.B blog.rc
+file. If undefined, 
+.B ~/.blogrc
+is used.
+.SH AUTHOR
+Casey Marshall\ \ rsdio@metastatic.org
+.SH SEE ALSO
+.BR date (1),
+.BR ispell (1),
+.BR rsh (1),
+.BR rsync (1),
+.BR ssh (1),
+.BR tidy (1).

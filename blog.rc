@@ -1,0 +1,120 @@
+# This is a sample blog.rc file. Edit the values below and move this
+# file to ".blogrc" in your home directory to get started.
+
+# Comments look like this, beginning with a '#' and continuing to the
+# end of line. Blank lines are ignored.
+#
+# Each assignment is of the form <name>=<value>, where NO spaces appear
+# on either side of the '=', and <value> either contains no spaces or is
+# enclosed in double quotes (").
+#
+# E.g. these are valid:
+# editor=vim
+# datefmt="%A, %d %B %Y"
+#
+# These are not:
+# editor = vim
+# datefmt=%A, %d %B %Y
+
+# editor: The text editior you want to use to create entries.
+editor=emacs
+
+# pager: A program that displays read-only text.
+pager=less
+
+# host: The remote host that houses your website. You need shell access
+# to this host.
+host=your.host.com
+
+# remotepath: The path on your remote host where your weblog should go.
+remotepath=path/to/weblog
+
+# username: The user name you use to log into your host.
+username=joeblow
+
+# usetidy: If you have HTML Tidy on your system, make this "y" to check
+# generated HTML with Tidy. Make this "n" if not.
+usetidy=y
+
+# tidyargs: arguments to pass to tidy in addition to `-m'.
+tidyargs="-asxhtml"
+
+# postexec: command to execute after an entry is added. You can include
+# the entry title with `%t' and the entry date with `%d'.
+# 
+# E.g.
+# postexec="echo Posted %t at %d"
+
+# localpath: Somewhere on this local machine where you want to keep
+# local copies of entries.
+localpath=/home/joeblow/myweblog
+
+# maxentries: The maximum number of entries to keep on any page. -1
+# means keep everything (and don't generate archive pages).
+maxentries=20
+
+# totalentries: The maximum number of entries to keep across all pages.
+# -1 means to keep everything.
+totalentries=-1
+
+# tempdir: A readable/writable directory to keep temporary files in.
+tempdir=/tmp
+
+# mainindex: The name of the main page of your weblog, where the newest
+# entries are kept.
+mainindex=index.html
+
+# mainpath: The path on the local machine where you want generated files
+# to be placed. If omitted, the value of "localpath" is assumed.
+mainpath=/home/joeblow/public_html/weblog
+
+# maintemplate: The template, which must exist in "localpath", from
+# which the main page is generated.
+maintemplate=main.tmp
+
+# archivetmplt: The template used to generate archive pages. This can be
+# the same as the main template.
+archivetmplt=main.tmp
+
+# archivepre: A string to prefix to the filenames of archive pages. If
+# this ends with a '/', archives are kept in a seperate subdirectory.
+archivepre=archive/
+
+# archivesuf: A string to suffix to the filenames of archive pages.
+# In this case, the first archive page would be kept in a file:
+# 
+#	archive/0.html
+archivesuf=.html
+
+# entrytemplate: The template used to format individual entries.
+entrytemplate=entry.tmp
+
+# datefmt: A string that tells how to format dates when they appear in
+# entries. The format of this string is equivalent to that in date(1).
+# Use "man 1 date" for a description of this.
+datefmt="%A, %d %B %Y"
+
+# individual: Set this to "yes" to generate a page for each entry.
+individual="yes"
+
+# The next three are only used in individual is set to "yes".
+#
+# indivDir: A directory, available in both $localpath and $remotepath,
+# where individual entries will be put.
+indivDir=entries
+
+# indivTemplate: The template for individual entry pages. The semantics
+# of this template are the same as for the entrytemplate.
+indivTemplate=indiv.template
+
+# indivSuffix: The suffix to append to individual entry pages.
+indivSuffix=.html
+
+# postexec: a command to run after adding a new entry. The following
+# entities are expanded thusly:
+#
+#	%t -- The entry's title.
+#	%d -- The entry's date.
+#	%i -- The entry's unique identifier.
+#
+postexec="echo Posted %t at %d. ID=%i"

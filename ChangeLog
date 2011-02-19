@@ -1,0 +1,71 @@
+2003-11-05  Casey Marshall  <rsdio@metastatic.org>
+
+	* Version 2.2. This fixes some more typos.
+
+	* blog.in: Added 'mainpath' parameter.
+	(versdate): updated.
+	(rebuild): fixed typo.
+	(upload): fixed typo.
+
+	* blog.1: added description of 'mainpath'.
+	
+2003-10-26  Casey Marshall  <rsdio@metastatic.org>
+
+	* Version 2.1.
+
+	* blog.in
+	(versdate): updated.
+	(rebuild): fixed typo.
+
+	* blog.1: removed duplicate 'postexec' description.
+
+2003-07-01  Casey Marshall  <rsdio@metastatic.org>
+
+	* Individual page generation now supported.
+
+	* Exec of command after adding entries.
+
+	* Bug fixes.
+
+	* Version 2.0.
+
+2003-06-21  Casey Marshall  <rsdio@metastatic.org>
+
+	* Actually use the `archivetmplt' variable.
+
+	* Sanity checks added.
+
+2003-02-04  Casey Marshall  <rsdio@metastatic.org>
+
+	* Added `tidyargs' variable.
+
+	* Added `postexec' variable.
+
+2003-01-05  Casey Marshall  <rsdio@metastatic.org>
+
+	* A few bug fixes, formatting changes, and a public stable
+	  release.
+
+2002-02-07  Casey Marshall  <rsdio@metastatic.org>
+
+	* Cluestick w/r/t "echo" in ksh.
+
+2001-11-24  Casey Marshall  <rsdio@metastatic.org>
+
+	* Replaced sed and awk scripts with perl. This also takes care
+	  of (probably) the "bad" characters that could break sed and
+	  awk, e.g. '/'.
+
+2001-08-26  Casey Marshall  <rsdio@metastatic.org>
+
+	* --verbose now does a little more.
+
+	* Added man/man1/blog.1
+
+2001-08-01  Casey Marshall  <rsdio@metastatic.org>
+
+	* First working version ready. Tests have gone smoothly.
+
+	* BUGS: The shell script is kind of ugly/incomprehensible.
+
+	* Start ChangeLog.
