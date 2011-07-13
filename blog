@@ -211,6 +211,26 @@ function rebuild {
           \\$_ =~ s/\\'/\\\\\\\\'/g;
           print;
         }"`
+      _entryyear=`echo $entryyear | \
+        perl -e "while (<STDIN>) {
+          \\$_ =~ s/\\'/\\\\\\\\'/g;
+          print;
+        }"`
+      _entrymonth=`echo $entrymonth | \
+        perl -e "while (<STDIN>) {
+          \\$_ =~ s/\\'/\\\\\\\\'/g;
+          print;
+        }"`
+      _entryday=`echo $entryday | \
+        perl -e "while (<STDIN>) {
+          \\$_ =~ s/\\'/\\\\\\\\'/g;
+          print;
+        }"`
+      _entryslug=`echo $entryslug | \
+        perl -e "while (<STDIN>) {
+          \\$_ =~ s/\\'/\\\\\\\\'/g;
+          print;
+        }"`
       perl -e "open (IN, \"$tempfile\");
         open (ENTRY, \"${file}-sect-01\");
         while (<ENTRY>) {
@@ -220,19 +240,29 @@ function rebuild {
         \$entrydate = '$_entrydate';
         \$entrytitle = '$_entrytitle';
         \$entryid = '$entryid';
+        \$entryslug = '$_entryslug';
+        \$entryyear = '$_entryyear';
+        \$entrymonth = '$_entrymonth';
+        \$entryday = '$_entryday';
         while (<IN>) {
           \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
           \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
           \$_ =~ s/<-blogentrybody->/\$entry/gio;
           \$_ =~ s/<-blogentryid->/\$entryid/gio;
+          \$_ =~ s/<-blogentryslug->/\$entryslug/gio;
+          \$_ =~ s/<-blogentryyear->/\$entryyear/gio;
+          \$_ =~ s/<-blogentrymonth->/\$entrymonth/gio;
+          \$_ =~ s/<-blogentryday->/\$entryday/gio;
           print;
         }
         close (IN);" > $tempfile.2
       mv -f $tempfile.2 $tempfile
       if [ "$individual" = "yes" -a "$entryid" ]; then
+        entryPath=$mainpath/$indivDir/$_entryyear/$_entrymonth/$_entryday
+        mkdir -p $entryPath || die "$progname unable to create $entryPath; please resolve"
         cat $localpath/$indivTemplate > $tempdir/$entryid$indivSuffix
         perl -e "open (IN, \"${tempdir}/${entryid}${indivSuffix}\");
-          open(OUT, \">${mainpath}/${indivDir}/${entryid}${indivSuffix}\");
+          open(OUT, \">${entryPath}/${entryslug}${indivSuffix}\");
           open(ENTRY, \"${file}-sect-01\");
           \$entry = \"\";
           while (<ENTRY>) {
@@ -242,11 +272,19 @@ function rebuild {
           \$entrydate = '$_entrydate';
           \$entrytitle = '$_entrytitle';
           \$entryid = '$entryid';
+          \$entryslug = '$_entryslug';
+          \$entryyear = '$_entryyear';
+          \$entrymonth = '$_entrymonth';
+          \$entryday = '$_entryday';
           while (<IN>) {
             \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
             \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
             \$_ =~ s/<-blogentrybody->/\$entry/gio;
             \$_ =~ s/<-blogentryid->/\$entryid/gio;
+            \$_ =~ s/<-blogentryslug->/\$entryslug/gio;
+            \$_ =~ s/<-blogentryyear->/\$entryyear/gio;
+            \$_ =~ s/<-blogentrymonth->/\$entrymonth/gio;
+            \$_ =~ s/<-blogentryday->/\$entryday/gio;
             print OUT \$_;
           }
           close(IN);
@@ -261,14 +299,22 @@ function rebuild {
           \$entry = \$entry . \$_;
         }
         close (ENTRY);
-        \$entrydate = '$_entrydate';
-        \$entrytitle = '$_entrytitle';
-        \$entryid = '$entryid';
-        while (<IN>) {
-          \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
-          \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
-          \$_ =~ s/<-blogentrybody->/\$entry/gio;
-          \$_ =~ s/<-blogentryid->/\$entryid/gio;
+          \$entrydate = '$_entrydate';
+          \$entrytitle = '$_entrytitle';
+          \$entryid = '$entryid';
+          \$entryslug = '$_entryslug';
+          \$entryyear = '$_entryyear';
+          \$entrymonth = '$_entrymonth';
+          \$entryday = '$_entryday';
+          while (<IN>) {
+            \$_ =~ s/<-blogentrytitle->/\$entrytitle/gio;
+            \$_ =~ s/<-blogentrydate->/\$entrydate/gio;
+            \$_ =~ s/<-blogentrybody->/\$entry/gio;
+            \$_ =~ s/<-blogentryid->/\$entryid/gio;
+            \$_ =~ s/<-blogentryslug->/\$entryslug/gio;
+            \$_ =~ s/<-blogentryyear->/\$entryyear/gio;
+            \$_ =~ s/<-blogentrymonth->/\$entrymonth/gio;
+            \$_ =~ s/<-blogentryday->/\$entryday/gio;
           print;
         }
         close (IN);" > $feedtemp.2
@@ -358,9 +404,14 @@ function rebuild {
           close (IN);" > $tempfile.2
         mv -f $tempfile.2 $tempfile
         if [ "$individual" = "yes" -a "$entryid" ]; then
+          day=`date +%d`
+          month=`date +%m`
+          year=`date +%Y`
+          entryPath=$mainpath/$indivDir/$year/$month/$day
+          mkdir -p $entryPath || die "$progname cannot create $entryPath"
           cat $localpath/$indivTemplate > $tempdir/$entryid$indivSuffix
           perl -e "open (IN, \"${tempdir}/${entryid}${indivSuffix}\");
-            open(OUT, \">${mainpath}/${indivDir}/${entryid}${indivSuffix}\");
+            open(OUT, \">${entryPath}/${entryid}${indivSuffix}\");
             open(ENTRY, \"$file-sect-01\");
             while (<ENTRY>) {
               \$entry = \$entry . \$_;
@@ -860,6 +911,9 @@ if [ $add -ge 1 ]; then
 
   entryid=`date +%Y%m%d%H%M%S`
   entrydate=`date +"$datefmt"`
+  entryyear=`date +%Y`
+  entrymonth=`date +%m`
+  entryday=`date +%d`
   if [ $verbose -eq 1 ]; then
     echo "Adding new entry for date $entrydate..."
   fi
@@ -887,11 +941,19 @@ if [ $add -ge 1 ]; then
   fi
 
   tail -c 1 $tempfile | perl -n -e 'exit(!/[^\r\n]/);' && echo >> $tempfile
- 
+
+  # Make title slug
+  entryslug="$(echo -n "${entrytitle}" | sed -e 's/[^[:alnum:]]/-/g' \
+  | tr -s '-' | tr A-Z a-z)"
+
   echo "##BEGIN_HEAD $entrydate $entrytitle##" > $localpath/entries.0
   echo "entryid=\"$entryid\"" >> $localpath/entries.0
   echo "entrydate=\"$entrydate\"" >> $localpath/entries.0
+  echo "entryyear=\"$entryyear\"" >> $localpath/entries.0
+  echo "entrymonth=\"$entrymonth\"" >> $localpath/entries.0
+  echo "entryday=\"$entryday\"" >> $localpath/entries.0
   echo "entrytitle=\"$entrytitle\"" >> $localpath/entries.0
+  echo "entryslug=\"$entryslug\"" >> $localpath/entries.0
   echo "##BEGIN_ENTRY $entrydate $entrytitle##" >> $localpath/entries.0
   cat $tempfile >> $localpath/entries.0
   echo "##END_ENTRY $entrydate $entrytitle##" >> $localpath/entries.0
@@ -965,13 +1027,13 @@ fi
 if [ -n "$rsync" ]; then
   if [ $upload -eq 1 ]; then
     if [ $verbose -eq 1 ]; then
-      rsyncopts=-vR
+      rsyncopts=-vRr
     else
-      rsyncopts=-R
+      rsyncopts=-Rr
     fi
     cd $mainpath
     files=
-    for f in $mainindex $archivepre*$archivesuf $indivDir/*$indivSuffix $feedindex
+    for f in $mainindex $archivepre*$archivesuf $indivDir/ $feedindex
     do
       if [ -e $f ]; then
         files="$files $f"
